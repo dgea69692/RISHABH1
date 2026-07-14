@@ -1,0 +1,241 @@
+"""
+Snake Game - Python + turtle
+------------------------------
+No installation needed! turtle comes built-in with Python.
+
+How to run in VS Code:
+    1. Open this file in VS Code.
+    2. Open a terminal (Terminal > New Terminal).
+    3. Run:   python snake.py
+
+Controls:
+    Arrow keys -> change direction
+    Space      -> pause / resume
+    R          -> restart after game over
+"""
+
+import turtle
+import random
+import time
+
+# ----------------------------- Setup -----------------------------
+WIDTH, HEIGHT = 600, 600
+CELL = 20  # size of each snake segment / food square
+SPEED_START = 0.15  # seconds per frame (lower = faster)
+
+screen = turtle.Screen()
+screen.title("Snake")
+screen.bgcolor("#1e1e2e")
+screen.setup(width=WIDTH, height=HEIGHT)
+screen.tracer(0)  # manual screen updates for smooth animation
+
+# ----------------------------- Score display -----------------------------
+score_writer = turtle.Turtle()
+score_writer.hideturtle()
+score_writer.color("#f5f5f5")
+score_writer.penup()
+score_writer.goto(0, HEIGHT // 2 - 40)
+
+message_writer = turtle.Turtle()
+message_writer.hideturtle()
+message_writer.color("#ffd93d")
+message_writer.penup()
+message_writer.goto(0, 0)
+
+
+def draw_score(score, high_score):
+    score_writer.clear()
+    score_writer.write(
+        f"Score: {score}    Best: {high_score}",
+        align="center", font=("Arial", 16, "bold")
+    )
+
+
+def draw_message(text, color="#ffd93d", y=0):
+    message_writer.clear()
+    message_writer.goto(0, y)
+    message_writer.color(color)
+    message_writer.write(text, align="center", font=("Arial", 20, "bold"))
+
+
+# ----------------------------- Snake -----------------------------
+def create_segment(x, y, color="#4ecdc4"):
+    seg = turtle.Turtle()
+    seg.shape("square")
+    seg.color(color)
+    seg.shapesize(CELL / 20)
+    seg.penup()
+    seg.goto(x, y)
+    return seg
+
+
+snake = [create_segment(0, 0, "#ff6b6b")]  # head is brighter
+direction = "Stop"
+next_direction = "Stop"
+
+# ----------------------------- Food -----------------------------
+food = turtle.Turtle()
+food.shape("circle")
+food.color("#ffd93d")
+food.shapesize(CELL / 20)
+food.penup()
+
+
+def place_food():
+    half_w = (WIDTH // 2 // CELL) * CELL
+    half_h = (HEIGHT // 2 // CELL) * CELL
+    while True:
+        x = random.randrange(-half_w, half_w, CELL)
+        y = random.randrange(-half_h, half_h, CELL)
+        if (x, y) not in [(s.xcor(), s.ycor()) for s in snake]:
+            food.goto(x, y)
+            break
+
+
+place_food()
+
+# ----------------------------- State -----------------------------
+score = 0
+high_score = 0
+game_over = False
+paused = False
+speed = SPEED_START
+
+
+def load_high_score():
+    try:
+        with open("snake_highscore.txt", "r") as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def save_high_score(value):
+    with open("snake_highscore.txt", "w") as f:
+        f.write(str(value))
+
+
+high_score = load_high_score()
+draw_score(score, high_score)
+
+# ----------------------------- Controls -----------------------------
+def go_up():
+    global next_direction
+    if direction != "down":
+        next_direction = "up"
+
+
+def go_down():
+    global next_direction
+    if direction != "up":
+        next_direction = "down"
+
+
+def go_left():
+    global next_direction
+    if direction != "right":
+        next_direction = "left"
+
+
+def go_right():
+    global next_direction
+    if direction != "left":
+        next_direction = "right"
+
+
+def toggle_pause():
+    global paused
+    if not game_over:
+        paused = not paused
+        if paused:
+            draw_message("PAUSED", "#f5f5f5")
+        else:
+            draw_message("")
+
+
+def restart():
+    global snake, direction, next_direction, score, game_over, paused, speed
+    if not game_over:
+        return
+    for seg in snake:
+        seg.hideturtle()
+    snake = [create_segment(0, 0, "#ff6b6b")]
+    direction = "Stop"
+    next_direction = "Stop"
+    score = 0
+    game_over = False
+    paused = False
+    speed = SPEED_START
+    draw_message("")
+    draw_score(score, high_score)
+    place_food()
+
+
+screen.listen()
+screen.onkeypress(go_up, "Up")
+screen.onkeypress(go_down, "Down")
+screen.onkeypress(go_left, "Left")
+screen.onkeypress(go_right, "Right")
+screen.onkeypress(toggle_pause, "space")
+screen.onkeypress(restart, "r")
+
+# ----------------------------- Game Loop -----------------------------
+while True:
+    screen.update()
+
+    if game_over or paused:
+        time.sleep(0.1)
+        continue
+
+    direction = next_direction
+    if direction == "Stop":
+        time.sleep(0.1)
+        continue
+
+    # move body: each segment follows the one in front of it
+    for i in range(len(snake) - 1, 0, -1):
+        x = snake[i - 1].xcor()
+        y = snake[i - 1].ycor()
+        snake[i].goto(x, y)
+
+    # move head
+    head = snake[0]
+    x, y = head.xcor(), head.ycor()
+    if direction == "up":
+        head.goto(x, y + CELL)
+    elif direction == "down":
+        head.goto(x, y - CELL)
+    elif direction == "left":
+        head.goto(x - CELL, y)
+    elif direction == "right":
+        head.goto(x + CELL, y)
+
+    # wall collision
+    half_w = WIDTH // 2
+    half_h = HEIGHT // 2
+    if abs(head.xcor()) > half_w - CELL / 2 or abs(head.ycor()) > half_h - CELL / 2:
+        game_over = True
+
+    # self collision
+    for seg in snake[1:]:
+        if seg.distance(head) < CELL / 2:
+            game_over = True
+
+    if game_over:
+        if score > high_score:
+            high_score = score
+            save_high_score(high_score)
+        draw_score(score, high_score)
+        draw_message("GAME OVER - Press R to restart", "#ff6b6b")
+        continue
+
+    # food collision
+    if head.distance(food) < CELL:
+        snake.append(create_segment(head.xcor(), head.ycor()))
+        score += 1
+        if score % 5 == 0 and speed > 0.06:
+            speed -= 0.01
+        draw_score(score, high_score)
+        place_food()
+
+    time.sleep(speed)
